@@ -1,0 +1,42 @@
+name: Build demo APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect app files
+        run: |
+          mkdir -p www assets
+          cp index.html config.js demo.js manifest.webmanifest icon-192.png icon-512.png www/
+          cp icon-only.png assets/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm install
+      - run: npx cap add android
+      - name: App icon
+        continue-on-error: true
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#1f4e8c' --iconBackgroundColorDark '#1f4e8c'
+      - name: Printing support
+        run: cp MainActivity.java android/app/src/main/java/com/sugarkhata/demo/MainActivity.java
+      - run: npx cap sync android
+      - name: Signing key
+        run: mkdir -p ~/.android && cp debug.keystore ~/.android/debug.keystore
+      - name: Build APK
+        run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - name: Publish download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk SugarKhata-Demo.apk
+          gh release create "v1.${{ github.run_number }}" SugarKhata-Demo.apk --title "Sugar Khata Demo v1.${{ github.run_number }}" --notes "Demo build with sample data. Download the APK on an Android phone and open it."
